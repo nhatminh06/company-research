@@ -1,0 +1,30 @@
+@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* .prose p,
+.prose ul,
+.prose ol,
+.prose li {
+  margin-top: 0.2em !important;
+  margin-bottom: 0.2em !important;
+} */
+
+/* Tighter spacing for evaluation markdown */
+.tight-markdown p,
+.tight-markdown ul,
+.tight-markdown ol,
+.tight-markdown li,
+.tight-markdown h1,
+.tight-markdown h2,
+.tight-markdown h3,
+.tight-markdown h4,
+.tight-markdown h5,
+.tight-markdown h6 {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  line-height: 2em !important;
+  padding: 0 !important;
+}
+
