@@ -65,7 +65,7 @@ flowchart TD
     User["🧑 User"] -->|Browser| FE["Frontend (React/Vite)"]
     FE -->|REST API| BE["Backend (Node.js/Express)"]
     BE -->|Child Process| PY["Python AI (ai_agents.py)"]
-    BE -->|Mongoose| DB["MongoDB Atlas"]
+    BE -->|Mongoose| DB["MongoDB Local"]
     FE <--> |Axios| BE
 ```
 
