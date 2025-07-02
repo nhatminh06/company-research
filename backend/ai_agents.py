@@ -190,4 +190,3 @@ async def ai_resume_evaluate(req: ResumeRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 # To run: uvicorn backend.ai_agents:app --reload --port 8000
-# To run: uvicorn backend.ai_agents:app --reload --port 8000
