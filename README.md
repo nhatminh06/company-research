@@ -33,8 +33,6 @@ A modern, full-stack web application for researching, tracking, and managing com
 - 🌐 CORS enabled
 
 **DevOps:**
-- ☁️ Vercel (Frontend)
-- ☁️ Render (Backend)
 - 🐙 GitHub (Version Control)
 
 ---
