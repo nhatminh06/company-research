@@ -4,10 +4,10 @@ const cors = require('cors');
 require('dotenv').config();
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret';
 const bcrypt = require('bcryptjs');
 const User = require('./models/User');
 const ResumeEvaluation = require('./models/ResumeEvaluation');
-const JWT_SECRET = process.env.JWT_SECRET || 'changeme';
 const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
@@ -21,9 +21,21 @@ const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const SMTP_PORT = process.env.SMTP_PORT || 587;
 const crypto = require('crypto');
 
-// Rate limiting for Brandfetch API
 let lastBrandfetchCall = 0;
 const BRANDFETCH_RATE_LIMIT = 1000; // 1 second between calls
+
+const jwtAuth = (req, res, next) => {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const token = auth.split(' ')[1];
+    const payload = jwt.verify(token, JWT_SECRET);
+    req.user = payload;
+    next();
+  } catch (e) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+};
 
 const app = express();
 app.use(cors());
@@ -373,9 +385,10 @@ app.post('/api/ai-company-summary', async (req, res) => {
 });
 
 // Resume evaluation endpoint with database caching
-app.post('/api/ai-resume-evaluate', async (req, res) => {
+app.post('/api/ai-resume-evaluate', jwtAuth, async (req, res) => {
   try {
     const { company, resume } = req.body;
+    const userId = req.user.id;
     
     if (!company || !resume) {
       return res.status(400).json({ error: 'Company and resume are required' });
@@ -386,7 +399,8 @@ app.post('/api/ai-resume-evaluate', async (req, res) => {
     const resumeHash = crypto.createHash('md5').update(JSON.stringify(resume)).digest('hex');
     const existingEvaluation = await ResumeEvaluation.findOne({ 
       company: company,
-      resumeHash: resumeHash 
+      resumeHash: resumeHash,
+      user: userId
     });
 
     if (existingEvaluation) {
@@ -411,7 +425,8 @@ app.post('/api/ai-resume-evaluate', async (req, res) => {
       resumeHash: resumeHash,
       qualifications: response.data.qualifications,
       rating: response.data.rating,
-      advice: response.data.advice
+      advice: response.data.advice,
+      user: userId
     });
     
     await evaluation.save();
@@ -462,9 +477,10 @@ app.get('/api/resume-evaluations', async (req, res) => {
 });
 
 // Force refresh resume evaluation (delete old and regenerate)
-app.post('/api/ai-resume-evaluate/refresh', async (req, res) => {
+app.post('/api/ai-resume-evaluate/refresh', jwtAuth, async (req, res) => {
   try {
     const { company, resume } = req.body;
+    const userId = req.user.id;
     
     if (!company || !resume) {
       return res.status(400).json({ error: 'Company and resume are required' });
@@ -476,7 +492,8 @@ app.post('/api/ai-resume-evaluate/refresh', async (req, res) => {
     // Delete existing evaluation if it exists
     await ResumeEvaluation.deleteOne({ 
       company: company,
-      resumeHash: resumeHash 
+      resumeHash: resumeHash,
+      user: userId
     });
 
     // Call the AI service to generate new evaluation
@@ -489,7 +506,8 @@ app.post('/api/ai-resume-evaluate/refresh', async (req, res) => {
       resumeHash: resumeHash,
       qualifications: response.data.qualifications,
       rating: response.data.rating,
-      advice: response.data.advice
+      advice: response.data.advice,
+      user: userId
     });
     
     await evaluation.save();
@@ -898,19 +916,6 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 // --- END LOCAL AUTH ONLY ---
-
-const jwtAuth = (req, res, next) => {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
-  try {
-    const token = auth.split(' ')[1];
-    const payload = jwt.verify(token, JWT_SECRET);
-    req.user = payload;
-    next();
-  } catch (e) {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-};
 
 // User profile routes
 app.put('/api/user/profile', jwtAuth, userControllers.updateUserProfile);

@@ -120,10 +120,8 @@ const adviceMarkdownComponents = {
 
     if (text.trim().toLowerCase().startsWith('example:')) {
       return (
-        <div className="mt-4 mb-1">
-          <span className="text-yellow-700 font-bold text-base flex items-center">
-            <span className="mr-2">📌</span> Example
-          </span>
+        <div className="mt-4 mb-1 bg-yellow-100 border border-yellow-300 rounded px-4 py-2">
+          <span className="font-bold text-base text-yellow-900 mb-2 block">Example:</span>
         </div>
       );
     }
@@ -131,7 +129,7 @@ const adviceMarkdownComponents = {
     return <p className="mb-3 leading-relaxed text-gray-800">{children}</p>;
   },
   li: ({ children }) => (
-    <li className="ml-6 list-disc text-gray-800 mb-1">{children}</li>
+    <li className="ml-8 list-disc text-gray-900 mb-1">{children}</li>
   ),
 };
 
@@ -277,22 +275,6 @@ const CopyAdviceButton = ({ text }) => {
   );
 };
 
-// Print/Save as PDF button using react-to-print
-const PrintResumeButton = ({ targetRef }) => {
-  const handlePrint = useReactToPrint({
-    content: () => targetRef.current,
-    documentTitle: 'resume',
-  });
-  return (
-    <button
-      onClick={handlePrint}
-      className="ml-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-base font-medium transition-colors duration-200"
-    >
-      🖨️ Print / Save as PDF
-    </button>
-  );
-};
-
 export default function Resume() {
   const [resumeData, setResumeData] = useState({
     personalInfo: {
@@ -419,8 +401,15 @@ export default function Resume() {
 
   const saveResume = async () => {
     setStatus('Saving...');
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setStatus('You must be logged in to save your resume.');
+      return;
+    }
     try {
-        const response = await axios.post('/api/resume', resumeData);
+        const response = await axios.post('/api/resume', resumeData, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         setResumeData(response.data);
         setStatus('Resume saved successfully!');
     } catch (error) {
@@ -433,10 +422,18 @@ export default function Resume() {
     setEvalLoading(true);
     setEvalError('');
     setEvaluation(null);
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setEvalError('You must be logged in to evaluate your resume.');
+      setEvalLoading(false);
+      return;
+    }
     try {
       const res = await axios.post('/api/ai-resume-evaluate', {
         company: targetCompany,
         resume: resumeData
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
       setEvaluation(res.data);
     } catch (err) {
@@ -462,7 +459,6 @@ export default function Resume() {
         <div className="bg-white rounded-lg shadow-md p-6" ref={resumeContentRef}>
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-3xl font-bold text-gray-900">Resume Builder</h1>
-            <PrintResumeButton targetRef={resumeContentRef} />
           </div>
           
           <form className="space-y-8">
@@ -775,10 +771,18 @@ export default function Resume() {
                   onClick={async () => {
                     setEvalLoading(true);
                     setEvalError('');
+                    const token = localStorage.getItem('token');
+                    if (!token) {
+                      setEvalError('You must be logged in to refresh evaluation.');
+                      setEvalLoading(false);
+                      return;
+                    }
                     try {
                       const res = await axios.post('/api/ai-resume-evaluate/refresh', {
                         company: targetCompany,
                         resume: resumeData
+                      }, {
+                        headers: { Authorization: `Bearer ${token}` }
                       });
                       setEvaluation(res.data);
                     } catch (err) {
@@ -816,9 +820,9 @@ export default function Resume() {
                     <strong className="text-lg">Company Requirements</strong>
                   </div>
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-1 space-y-6">
-                    <div className="bg-blue-100 border border-blue-300 rounded-md shadow-sm p-4">
+                    <div className="bg-blue-100 border border-blue-300 rounded-md shadow-sm p-4 max-h-100 overflow-y-auto">
                       <div className="tight-markdown text-base text-gray-800 leading-relaxed">
-                        <ReactMarkdown components={requirementsMarkdownComponents}>
+                        <ReactMarkdown components={requirementsMarkdownComponents}> 
                           {addBulletsToLines(evaluation.qualifications || '')}
                         </ReactMarkdown>
                       </div>
@@ -832,7 +836,7 @@ export default function Resume() {
                     <strong className="text-lg">Pass Percentage & Explanation</strong>
                   </div>
                   <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-1 space-y-6">
-                    <div className="bg-green-100 border border-green-300 rounded-md shadow-sm p-4">
+                    <div className="bg-green-100 border border-green-300 rounded-md shadow-sm p-4 max-h-100 overflow-y-auto">
                       {(() => {
                         const rating = evaluation.rating || '';
                         const match = rating.match(/(\d{1,3})%\s*([\s\S]*)/);
@@ -883,7 +887,7 @@ export default function Resume() {
                     <strong className="text-lg">Advice to Improve</strong>
                   </div>
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-1 space-y-6">
-                    <div className="bg-yellow-100 border border-yellow-300 rounded-md shadow-sm p-4">
+                    <div className="bg-yellow-100 border border-yellow-300 rounded-md shadow-sm p-4 max-h-100 overflow-y-auto">
                       <CopyAdviceButton text={evaluation?.advice || ''} />
                       <AdviceSection advice={evaluation?.advice || ''} />
                     </div>
