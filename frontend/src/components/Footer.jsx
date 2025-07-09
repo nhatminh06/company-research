@@ -40,7 +40,7 @@ export default function Footer() {
 
             {/* GitHub */}
             <a
-              href="https://github.com/your-repo"
+              href="https://github.com/nhatminh06/company-research"
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-blue-200 transition-colors duration-200"

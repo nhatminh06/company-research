@@ -1,17 +1,8 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
-import React from 'react'
-// This file is large; consider splitting into smaller components (e.g., ResumeForm, ResumeEvaluation) for maintainability.
-
-const adviceIcons = {
-  1: '🎓', // Education
-  2: '💼', // Experience
-  3: '🛠️', // Skills or Projects
-  4: '🧠', // Problem Solving
-  5: '🌐', // Communication/Team
-  default: '💡'
-};
+import React, { useRef } from 'react'
+import { useReactToPrint } from 'react-to-print';
 
 // Custom list item renderers for icons
 const requirementsListItem = {
@@ -110,6 +101,41 @@ const requirementsMarkdownComponents = {
   )
 };
 
+// Custom p and li renderer to highlight 'Example:' lines in blue and bold, and indent Example paragraphs
+const adviceMarkdownComponents = {
+  h3: ({ children }) => {
+    // Add the check icon only for the summary heading
+    const text = typeof children[0] === 'string' ? children[0] : '';
+    if (text.toLowerCase().includes('summary of suggested revisions')) {
+      return (
+        <h3 className="text-lg font-bold text-green-700 mt-6 mb-2 flex items-center">
+          <span className="mr-2">✅</span> {children}
+        </h3>
+      );
+    }
+    return <h3 className="text-lg font-bold text-yellow-800 mt-6 mb-2">{children}</h3>;
+  },
+  p: ({ children }) => {
+    const text = typeof children[0] === 'string' ? children[0] : '';
+
+    if (text.trim().toLowerCase().startsWith('example:')) {
+      return (
+        <div className="mt-4 mb-1">
+          <span className="text-yellow-700 font-bold text-base flex items-center">
+            <span className="mr-2">📌</span> Example
+          </span>
+        </div>
+      );
+    }
+
+    return <p className="mb-3 leading-relaxed text-gray-800">{children}</p>;
+  },
+  li: ({ children }) => (
+    <li className="ml-6 list-disc text-gray-800 mb-1">{children}</li>
+  ),
+};
+
+
 // Improved: Only split bolded headers at the start of a line or after a newline, not inline bold text
 function preprocessSectionHeaders(markdown) {
   // Replace **Header:** or **Header** at the start of a line (or after a newline) with a newline, header, newline
@@ -151,6 +177,121 @@ function addBulletsToLines(markdown) {
     )
     .join('\n');
 }
+
+function formatAdviceMarkdown(raw) {
+  if (!raw) return '';
+
+  let md = raw.replace(/\[\d+\]/g, ''); // remove citation refs like [1]
+  md = md.replace(/^##?\s*💡\s*Tips.*$/im, ''); // remove top heading
+  md = md.replace(/^(\d+)\.\s*(.+)$/gm, '### $1. **$2**'); // bold headers
+  md = md.replace(/^Why:/gm, '**Why:**');
+  md = md.replace(/^How to Improve:/gm, '**How to Improve:**');
+  md = md.replace(/^Example:/gm, 'Example:'); // let ReactMarkdown handle it
+
+  return md.trim();
+}
+
+function formatAdviceAsCard(raw) {
+  if (!raw) return '';
+  // Remove [1], [2], [3] citations
+  let formatted = raw.replace(/\[\d+\]/g, '');
+  // Bold the 1., 2., 3. and Summary headings
+  formatted = formatted.replace(/^(###\s*)(\d+\.\s+)(.+)$/gm, '$1**$2$3**');
+  formatted = formatted.replace(/^(###\s*Summary of Suggested Revisions)/im, '### **Summary of Suggested Revisions**');
+  // Add a single blank line between each main part (### headings)
+  formatted = formatted.replace(/(\n### )/g, '\n\n### ');
+  // Add a small space before 'Example:' and indent paragraphs in Example with 2 spaces
+  formatted = formatted.replace(/^(\s*-?\s*)Example:/gm, '$1  Example:');
+  formatted = formatted.replace(/^(\s*-?\s*  Example:[^\n]*\n)([^-\n])/gm, '$1  $2');
+  return formatted.trim();
+}
+
+const AdviceSection = ({ advice }) => {
+  if (!advice) return null;
+  const formatted = formatAdviceMarkdown(advice);
+  return (
+    <ReactMarkdown components={adviceMarkdownComponents}>
+      {formatted}
+    </ReactMarkdown>
+  );
+};
+
+// Accordion section for advice
+const AdviceAccordionSection = ({ title, children, defaultOpen = true }) => {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="mb-4 border-b border-yellow-200 last:border-b-0">
+      <button
+        className="w-full flex items-center justify-between py-2 px-1 text-left focus:outline-none"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        <span className="font-bold text-yellow-800 text-lg flex items-center">
+          {title}
+        </span>
+        <span className="ml-2 text-yellow-700">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && <div className="pl-2 pt-1">{children}</div>}
+    </div>
+  );
+};
+
+// Accordion for all advice sections
+const AdviceAccordion = ({ advice }) => {
+  if (!advice) return null;
+  // Split advice into sections by h3 headings
+  const sections = advice.split(/(?=^### )/m).filter(Boolean);
+  return (
+    <div>
+      {sections.map((section, idx) => {
+        // Extract the title from the h3
+        const match = section.match(/^###\s*(.*)$/m);
+        const title = match ? match[1].replace(/\*\*/g, '') : `Section ${idx + 1}`;
+        // Remove the h3 from the content
+        const content = section.replace(/^###.*$/m, '').trim();
+        return (
+          <AdviceAccordionSection key={idx} title={title} defaultOpen={true}>
+            <ReactMarkdown components={adviceMarkdownComponents}>{content}</ReactMarkdown>
+          </AdviceAccordionSection>
+        );
+      })}
+    </div>
+  );
+};
+
+// Copy to clipboard button
+const CopyAdviceButton = ({ text }) => {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className="mb-3 px-3 py-1 bg-yellow-200 hover:bg-yellow-300 text-yellow-900 font-semibold rounded shadow-sm border border-yellow-300 transition"
+    >
+      {copied ? 'Copied!' : '📋 Copy Advice'}
+    </button>
+  );
+};
+
+// Print/Save as PDF button using react-to-print
+const PrintResumeButton = ({ targetRef }) => {
+  const handlePrint = useReactToPrint({
+    content: () => targetRef.current,
+    documentTitle: 'resume',
+  });
+  return (
+    <button
+      onClick={handlePrint}
+      className="ml-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-base font-medium transition-colors duration-200"
+    >
+      🖨️ Print / Save as PDF
+    </button>
+  );
+};
 
 export default function Resume() {
   const [resumeData, setResumeData] = useState({
@@ -196,6 +337,7 @@ export default function Resume() {
   const [evalLoading, setEvalLoading] = useState(false);
   const [evalError, setEvalError] = useState('');
   const [targetCompany, setTargetCompany] = useState('');
+  const resumeContentRef = useRef(null); // Attach to main content only
 
   useEffect(() => {
     const fetchResume = async () => {
@@ -317,8 +459,11 @@ export default function Resume() {
   return (
     <div className="min-h-screen bg-gray-50">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-6">Resume Builder</h1>
+        <div className="bg-white rounded-lg shadow-md p-6" ref={resumeContentRef}>
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-3xl font-bold text-gray-900">Resume Builder</h1>
+            <PrintResumeButton targetRef={resumeContentRef} />
+          </div>
           
           <form className="space-y-8">
             {/* Personal Information */}
@@ -624,9 +769,45 @@ export default function Resume() {
               >
                 {evalLoading ? 'Evaluating...' : 'Evaluate Resume'}
               </button>
+              {evaluation && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setEvalLoading(true);
+                    setEvalError('');
+                    try {
+                      const res = await axios.post('/api/ai-resume-evaluate/refresh', {
+                        company: targetCompany,
+                        resume: resumeData
+                      });
+                      setEvaluation(res.data);
+                    } catch (err) {
+                      setEvalError(err.response?.data?.detail || 'Error refreshing evaluation.');
+                    } finally {
+                      setEvalLoading(false);
+                    }
+                  }}
+                  className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md font-medium transition-colors duration-200"
+                  disabled={evalLoading || !targetCompany}
+                >
+                  {evalLoading ? 'Refreshing...' : '🔄 Refresh'}
+                </button>
+              )}
             </div>
             {evalError && <div className="text-red-600 mb-2">{evalError}</div>}
             {evaluation && (
+              <>
+                {evaluation.cached && (
+                  <div className="mb-4 p-3 bg-blue-100 border border-blue-300 rounded-md">
+                    <div className="flex items-center gap-2">
+                      <span className="text-blue-600">💾</span>
+                      <span className="text-blue-800 font-medium">Cached Evaluation</span>
+                      <span className="text-blue-600 text-sm">
+                        (Generated on {new Date(evaluation.createdAt).toLocaleDateString()})
+                      </span>
+                    </div>
+                  </div>
+                )}
               <div className="mt-4 flex flex-col gap-6">
                 {/* Company Requirements */}
                 <div className="mb-2">
@@ -695,57 +876,21 @@ export default function Resume() {
                   </div>
                 </div>
                 {/* Advice to Improve */}
+                
                 <div className="mb-2">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-yellow-500 text-xl">💡</span>
                     <strong className="text-lg">Advice to Improve</strong>
                   </div>
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-1 space-y-6">
-                    {(evaluation?.advice || '')
-                      .split(/\n(?=\d+\.\s)/)
-                      .filter(Boolean)
-                      .map((tip, idx) => {
-                        const [main, example] = tip.split('Example:');
-                        const tipNumberMatch = tip.match(/^(\d+)\./);
-                        const tipNumber = tipNumberMatch ? parseInt(tipNumberMatch[1], 10) : idx + 1;
-                        const icon = adviceIcons[tipNumber] || adviceIcons.default;
-
-                        // Split main into header (first line) and body (rest)
-                        const mainLines = (main ? main.replace(/^(\d+)\.\s*/, '').trim() : '').split('\n');
-                        const header = mainLines[0] || '';
-                        const body = mainLines.slice(1).join('\n');
-
-                        // Remove markdown heading symbols from the header
-                        const cleanHeader = header.replace(/^#+\s*/, '');
-
-                        return (
-                          <div key={idx} className="bg-yellow-100 border border-yellow-300 rounded-md shadow-sm p-4">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="text-yellow-600 text-2xl">{icon}</span>
-                              <span className="font-bold text-yellow-700 text-lg">Tips:</span>
-                              <span className="font-bold text-gray-900 text-lg ml-2">{cleanHeader}</span>
-                            </div>
-                            {body && (
-                              <div className="tight-markdown text-base text-gray-800 leading-relaxed mb-2">
-                                <ReactMarkdown components={requirementsMarkdownComponents}>
-                                  {body}
-                                </ReactMarkdown>
-                              </div>
-                            )}
-                            {example && (
-                              <div className="tight-markdown mt-1 px-4 py-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-gray-800">
-                                <div className="font-semibold mb-1 text-yellow-700">Example</div>
-                                <ReactMarkdown components={requirementsMarkdownComponents}>
-                                  {example.trim()}
-                                </ReactMarkdown>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                    <div className="bg-yellow-100 border border-yellow-300 rounded-md shadow-sm p-4">
+                      <CopyAdviceButton text={evaluation?.advice || ''} />
+                      <AdviceSection advice={evaluation?.advice || ''} />
+                    </div>
                   </div>
                 </div>
               </div>
+            </>
             )}
           </div>
         </div>

@@ -16,7 +16,23 @@ export default function Home() {
   const [companies, setCompanies] = useState([])
   const [metricsLoading, setMetricsLoading] = useState(true)
   const [companyTags, setCompanyTags] = useState([])
+  const [user, setUser] = useState(null)
   const navigate = useNavigate()
+
+  // Check for user authentication
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        setUser({ email: payload.email, name: payload.name || '', id: payload.id })
+      } catch (e) {
+        setUser(null)
+      }
+    } else {
+      setUser(null)
+    }
+  }, [])
 
   // Load welcome message from backend
   useEffect(() => {
@@ -87,10 +103,10 @@ export default function Home() {
           <h1 className="text-4xl md:text-5xl font-extrabold mb-4 drop-shadow-lg">Research Smarter. Decide Faster.</h1>
           <p className="text-lg md:text-2xl font-medium mb-8 drop-shadow">Your AI-powered platform for company research, notes, and career decisions.</p>
           <Link
-            to="/auth"
+            to={user ? "/dashboard" : "/auth"}
             className="inline-block bg-white text-blue-700 font-bold px-8 py-3 rounded-lg shadow-lg text-lg hover:bg-blue-50 transition-colors duration-200"
           >
-            Get Started
+            {user ? "Go to Dashboard" : "Get Started"}
           </Link>
         </div>
         <div className="absolute inset-0 pointer-events-none">

@@ -148,7 +148,7 @@ export default function About() {
             <p className="text-gray-700 mb-4">We believe in the power of community! Whether you're a job seeker, student, mentor, or industry expert, your voice matters. Join our community to share insights, suggest features, report bugs, or simply connect with others on their career journey.</p>
             <div className="flex flex-col md:flex-row gap-4 justify-center items-center mb-4">
               <a href="mailto:support@companyresearch.app" className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-md font-medium transition-colors duration-200">Contact Us</a>
-              <a href="https://github.com/your-repo" target="_blank" rel="noopener noreferrer" className="bg-gray-800 hover:bg-gray-900 text-white px-6 py-2 rounded-md font-medium transition-colors duration-200">Contribute on GitHub</a>
+              <a href="https://github.com/nhatminh06/company-research" target="_blank" rel="noopener noreferrer" className="bg-gray-800 hover:bg-gray-900 text-white px-6 py-2 rounded-md font-medium transition-colors duration-200">Contribute on GitHub</a>
               <a href="/community" className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md font-medium transition-colors duration-200">Join the Community</a>
             </div>
             <p className="text-gray-500 text-sm">Let's build a better future, together.</p>

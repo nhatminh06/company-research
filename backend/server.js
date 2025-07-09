@@ -6,6 +6,7 @@ const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const User = require('./models/User');
+const ResumeEvaluation = require('./models/ResumeEvaluation');
 const JWT_SECRET = process.env.JWT_SECRET || 'changeme';
 const session = require('express-session');
 const passport = require('passport');
@@ -322,9 +323,11 @@ async function callPerplexity(prompt) {
   const response = await axios.post(
     PERPLEXITY_API_URL,
     {
-      model: 'pplx-70b-online',
+      model: 'sonar-pro',
       messages: [{ role: 'user', content: prompt }],
-      stream: false
+      stream: false,
+      search_mode: "academic",
+      web_search_options: { search_context_size: "low" }
     },
     {
       headers: {
@@ -369,11 +372,134 @@ app.post('/api/ai-company-summary', async (req, res) => {
   }
 });
 
-// Proxy to Python AI agent for resume evaluation
+// Resume evaluation endpoint with database caching
 app.post('/api/ai-resume-evaluate', async (req, res) => {
   try {
+    const { company, resume } = req.body;
+    
+    if (!company || !resume) {
+      return res.status(400).json({ error: 'Company and resume are required' });
+    }
+
+    // Check if evaluation already exists in database
+    // Create a hash of the resume content for consistent comparison
+    const resumeHash = crypto.createHash('md5').update(JSON.stringify(resume)).digest('hex');
+    const existingEvaluation = await ResumeEvaluation.findOne({ 
+      company: company,
+      resumeHash: resumeHash 
+    });
+
+    if (existingEvaluation) {
+      // Return cached evaluation
+      return res.json({
+        company: existingEvaluation.company,
+        qualifications: existingEvaluation.qualifications,
+        rating: existingEvaluation.rating,
+        advice: existingEvaluation.advice,
+        cached: true,
+        createdAt: existingEvaluation.createdAt
+      });
+    }
+
+    // If no cached evaluation exists, call the AI service
     const response = await axios.post(`${PYTHON_AI_URL}/ai-resume-evaluate`, req.body);
-    res.json(response.data);
+    
+    // Save the evaluation to database
+    const evaluation = new ResumeEvaluation({
+      company: company,
+      resume: resume,
+      resumeHash: resumeHash,
+      qualifications: response.data.qualifications,
+      rating: response.data.rating,
+      advice: response.data.advice
+    });
+    
+    await evaluation.save();
+
+    // Return the evaluation with cached flag
+    res.json({
+      ...response.data,
+      cached: false,
+      createdAt: evaluation.createdAt
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all resume evaluations for a company
+app.get('/api/resume-evaluations/:company', async (req, res) => {
+  try {
+    const { company } = req.params;
+    const evaluations = await ResumeEvaluation.find({ company }).sort({ createdAt: -1 });
+    res.json(evaluations);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete a specific resume evaluation
+app.delete('/api/resume-evaluations/:id', async (req, res) => {
+  try {
+    const deleted = await ResumeEvaluation.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Resume evaluation not found' });
+    }
+    res.json({ message: 'Resume evaluation deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all resume evaluations (for admin purposes)
+app.get('/api/resume-evaluations', async (req, res) => {
+  try {
+    const evaluations = await ResumeEvaluation.find().sort({ createdAt: -1 });
+    res.json(evaluations);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Force refresh resume evaluation (delete old and regenerate)
+app.post('/api/ai-resume-evaluate/refresh', async (req, res) => {
+  try {
+    const { company, resume } = req.body;
+    
+    if (!company || !resume) {
+      return res.status(400).json({ error: 'Company and resume are required' });
+    }
+
+    // Create hash for lookup
+    const resumeHash = crypto.createHash('md5').update(JSON.stringify(resume)).digest('hex');
+    
+    // Delete existing evaluation if it exists
+    await ResumeEvaluation.deleteOne({ 
+      company: company,
+      resumeHash: resumeHash 
+    });
+
+    // Call the AI service to generate new evaluation
+    const response = await axios.post(`${PYTHON_AI_URL}/ai-resume-evaluate`, req.body);
+    
+    // Save the new evaluation to database
+    const evaluation = new ResumeEvaluation({
+      company: company,
+      resume: resume,
+      resumeHash: resumeHash,
+      qualifications: response.data.qualifications,
+      rating: response.data.rating,
+      advice: response.data.advice
+    });
+    
+    await evaluation.save();
+
+    // Return the new evaluation
+    res.json({
+      ...response.data,
+      cached: false,
+      createdAt: evaluation.createdAt
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

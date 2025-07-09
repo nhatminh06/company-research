@@ -32,9 +32,11 @@ def call_perplexity(prompt: str) -> str:
         "Content-Type": "application/json"
     }
     data = {
-        "model": "llama-3.1-sonar-small-128k-online",
+        "model": "sonar-pro",
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
+        "search_mode": "academic",
+        "web_search_options": {"search_context_size": "low"}
     }
     response = requests.post(PERPLEXITY_API_URL, json=data, headers=headers)
     if not response.ok:
@@ -174,10 +176,39 @@ async def ai_resume_evaluate(req: ResumeRequest):
         advice_prompt = (
             f"Given the following job requirements for {req.company}:\n{qualifications}\n"
             f"And this candidate's resume: {resume_text}\n"
-            "What are the top 3 improvements or revisions the candidate should make to increase their chances of passing the CV round? "
-            "For each suggestion, provide a clear, user-friendly example in Markdown format. Use bullet points, tables, or short code blocks for structured data, but do NOT use code blocks for long sentences or paragraphs. For longer explanations, use bullet points or regular text. Format examples so they are easy for non-technical users to read and understand."
-            "Do NOT include any reference citations like [1], [2], etc. at the end of sentences or paragraphs."
+            "Write the top 3 improvements or revisions the candidate should make to increase their chances "
+            f"of passing the CV round for a role at {req.company}, using the following format:\n\n"
+
+            "## 💡 Tips: Top 3 Improvements for the Resume\n\n"
+
+            "### 1. [Title of Improvement]\n"
+            "**Why:** Explain why this change is critical for the target role.\n"
+            "**How to Improve:**\n"
+            "- Break down the improvement into clear, actionable bullet points.\n"
+            "- Include a realistic example using bullet points only (no paragraphs, no tables, no code blocks).\n"
+            "- Every example item must be its own bullet point.\n\n"
+
+            "### 2. [Title of Improvement]\n"
+            "**Why:** Explain the relevance to the company’s expectations.\n"
+            "**How to Improve:**\n"
+            "- Use concise and specific improvement actions.\n"
+            "- Add a bullet-point example showing how to implement the change.\n\n"
+
+            "### 3. [Title of Improvement]\n"
+            "**Why:** Explain what’s currently missing and how it impacts CV screening.\n"
+            "**How to Improve:**\n"
+            "- Describe measurable or structural additions.\n"
+            "- Provide an example with bullet points.\n\n"
+
+            "### Summary of Suggested Revisions\n"
+            "- **Improvement:** [Summarized Title]\n"
+            "  - **What to Add or Change:** [Concise guidance]\n"
+            "  - **Example:** [One or more bullet points only]\n\n"
+
+            "Use Markdown headings, bold text, and bullet points for structure. "
+            "Do NOT use tables, HTML tags, code blocks, or paragraph-based examples."
         )
+
         advice_result = call_perplexity(advice_prompt)
         return {
             "company": req.company,
